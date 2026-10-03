@@ -6,7 +6,10 @@ import {
   AnalyticsCharts,
 } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const RAW_API_BASE =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD ? 'https://dav-assignment-backendd.onrender.com' : 'http://localhost:8000');
+const API_BASE = RAW_API_BASE.replace(/\/$/, '');
 
 export async function checkBackendHealth(): Promise<{ status: string; service: string }> {
   const res = await fetch(`${API_BASE}/api/health`);
