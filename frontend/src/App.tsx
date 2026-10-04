@@ -7,12 +7,21 @@ import { HospitalDrawer } from './components/HospitalDrawer';
 import { HospitalCompareModal } from './components/HospitalCompareModal';
 import { DispatchModal, PatientDispatchInfo } from './components/DispatchModal';
 import { DataManagementView } from './components/DataManagementView';
+import { DataAnalysisView } from './components/analysis/DataAnalysisView';
 import { searchHospitals, getDatasetStatus, loadDemoDataset } from './services/api';
 import { Hospital, HospitalSearchRequest, HospitalSearchResponse, DatasetStatus } from './types';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
 
+const getInitialTab = (): 'finder' | 'results' | 'database' | 'analysis' => {
+  const hash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
+  if (hash === 'analysis') return 'analysis';
+  if (hash === 'database') return 'database';
+  if (hash === 'results') return 'results';
+  return 'finder';
+};
+
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<'finder' | 'results' | 'database'>('finder');
+  const [currentTab, setCurrentTab] = useState<'finder' | 'results' | 'database' | 'analysis'>(getInitialTab);
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     return localStorage.getItem('careroute_theme') === 'dark' || localStorage.getItem('pulseroute_theme') === 'dark';
   });
@@ -54,6 +63,20 @@ export default function App() {
       localStorage.setItem('careroute_theme', 'light');
     }
   }, [darkMode]);
+
+  // Sync active tab with URL hash for direct links and persistent refresh
+  useEffect(() => {
+    window.location.hash = `#/${currentTab}`;
+  }, [currentTab]);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const tab = getInitialTab();
+      setCurrentTab(tab);
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   // Check database status on mount
   const refreshDatabaseStatus = async () => {
@@ -351,6 +374,11 @@ export default function App() {
               }}
             />
           </div>
+        )}
+
+        {/* ================= TAB 4: DATA ANALYSIS ================= */}
+        {currentTab === 'analysis' && (
+          <DataAnalysisView onGoToDatabase={() => setCurrentTab('database')} />
         )}
       </main>
 

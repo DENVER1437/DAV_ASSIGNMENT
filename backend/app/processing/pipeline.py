@@ -389,6 +389,12 @@ class DataProcessingPipeline:
         """Return the calculated 6 pipeline steps if pipeline has been executed."""
         if self.pipeline_steps and len(self.pipeline_steps) == 6:
             return self.pipeline_steps
+        if settings.DATASET_RAW_PATH.exists():
+            try:
+                self.run_pipeline(settings.DATASET_RAW_PATH)
+                return self.pipeline_steps
+            except Exception:
+                pass
         return []
 
     def get_status(self) -> DatasetStatusResponse:

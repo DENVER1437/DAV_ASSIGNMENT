@@ -4,6 +4,14 @@ import {
   Hospital,
   DatasetStatus,
   AnalyticsCharts,
+  DatasetOverviewStats,
+  PreprocessingStageDetail,
+  AnalysisFilterRequest,
+  AnalysisResponse,
+  FeatureStatisticsResponse,
+  CorrelationMatrixResponse,
+  CrossAnalysisRequest,
+  CrossAnalysisResponse,
 } from '../types';
 
 const RAW_API_BASE =
@@ -236,5 +244,76 @@ export async function getDatabaseAuditLogs(limit = 20): Promise<any[]> {
 
 export function getDownloadDatasetUrl(): string {
   return `${API_BASE}/api/dataset/download`;
+}
+
+export function getDownloadRawDatasetUrl(): string {
+  return `${API_BASE}/api/dataset/download-raw`;
+}
+
+// ==================== Data Analysis API Calls ====================
+
+export async function getAnalysisOverview(): Promise<DatasetOverviewStats> {
+  const res = await fetch(`${API_BASE}/api/analytics/overview`);
+  if (!res.ok) throw new Error('Failed to load dataset overview analytics');
+  return res.json();
+}
+
+export async function getPreprocessingFlow(): Promise<PreprocessingStageDetail[]> {
+  const res = await fetch(`${API_BASE}/api/analytics/preprocessing-flow`);
+  if (!res.ok) throw new Error('Failed to load preprocessing flow stages');
+  return res.json();
+}
+
+export async function getFilteredAnalysis(filters?: AnalysisFilterRequest): Promise<AnalysisResponse> {
+  const res = await fetch(`${API_BASE}/api/analytics/analysis`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(filters || {}),
+  });
+  if (!res.ok) throw new Error('Failed to compute filtered dataset intelligence');
+  return res.json();
+}
+
+export async function getFeatureStatistics(
+  feature: string,
+  filters?: AnalysisFilterRequest
+): Promise<FeatureStatisticsResponse> {
+  const query = new URLSearchParams();
+  query.append('feature', feature);
+  if (filters?.state) query.append('state', filters.state);
+  if (filters?.city) query.append('city', filters.city);
+  if (filters?.hospital_category) query.append('hospital_category', filters.hospital_category);
+  if (filters?.hospital_care_type) query.append('hospital_care_type', filters.hospital_care_type);
+  if (filters?.emergency_services) query.append('emergency_services', filters.emergency_services);
+
+  const res = await fetch(`${API_BASE}/api/analytics/statistics?${query.toString()}`);
+  if (!res.ok) throw new Error(`Failed to calculate statistics for ${feature}`);
+  return res.json();
+}
+
+export async function getCorrelationMatrix(
+  filters?: AnalysisFilterRequest
+): Promise<CorrelationMatrixResponse> {
+  const query = new URLSearchParams();
+  if (filters?.state) query.append('state', filters.state);
+  if (filters?.city) query.append('city', filters.city);
+  if (filters?.hospital_category) query.append('hospital_category', filters.hospital_category);
+  if (filters?.hospital_care_type) query.append('hospital_care_type', filters.hospital_care_type);
+
+  const res = await fetch(`${API_BASE}/api/analytics/correlation?${query.toString()}`);
+  if (!res.ok) throw new Error('Failed to compute correlation matrix');
+  return res.json();
+}
+
+export async function getCrossAnalysis(
+  params: CrossAnalysisRequest
+): Promise<CrossAnalysisResponse> {
+  const res = await fetch(`${API_BASE}/api/analytics/cross-analysis`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw new Error('Failed to execute cross-dimensional analysis');
+  return res.json();
 }
 

@@ -10,24 +10,19 @@ import {
   ShieldCheck,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
-  ChevronUp,
   Info,
   Sparkles,
   ArrowRight,
   Trash2,
   FileText,
-  Activity,
   Bed,
   Layers,
   MapPin,
   Play,
-  Sliders,
   Table as TableIcon,
-  Check,
-  Cpu,
   FileCheck,
-  Clock
+  Clock,
+  FileSpreadsheet,
 } from 'lucide-react';
 import {
   getDatasetStatus,
@@ -36,11 +31,10 @@ import {
   resetDataset,
   getDatasetPreview,
   getDownloadDatasetUrl,
+  getDownloadRawDatasetUrl,
   getDatabaseStats,
   executeSqlQuery,
   getPresetQueries,
-  getPipelineSteps,
-  replayPipeline
 } from '../services/api';
 import {
   DatasetStatus,
@@ -48,247 +42,12 @@ import {
   DatabaseStats,
   SqlQueryResult,
   PresetQuery,
-  PipelineStepDetail
 } from '../types';
 
 interface DataManagementViewProps {
   onOpenFinder: () => void;
   onDatabaseReadyChange?: (ready: boolean) => void;
 }
-
-interface PipelineStepMeta {
-  id: number;
-  title: string;
-  brief: string;
-  input: string;
-  processing: string;
-  output: string;
-  defaultDuration: string;
-  defaultResult: string;
-  defaultMetrics: { label: string; value: string }[];
-}
-
-const PIPELINE_STEPS_METADATA: PipelineStepMeta[] = [
-  {
-    id: 1,
-    title: 'Data Ingestion & Schema Audit',
-    brief: 'Ingests raw hospital CSV stream, enforces UTF-8 encoding, and validates presence of mandatory clinical and geospatial schema attributes.',
-    input: 'Raw CSV dataset stream (10,035 unverified rows, 32 attributes)',
-    processing: 'UTF-8 byte decoding, column key presence audit, schema validation, data type normalization',
-    output: '10,035 parsed records verified with 100% schema integrity (0 missing columns)',
-    defaultDuration: '18.5ms',
-    defaultResult: '10,035 raw records • 32 columns',
-    defaultMetrics: [
-      { label: 'Raw Records', value: '10,035' },
-      { label: 'Schema Columns', value: '32 Attributes' },
-      { label: 'Encoding', value: 'UTF-8 Valid' },
-      { label: 'Missing Headers', value: '0 Missing' },
-    ],
-  },
-  {
-    id: 2,
-    title: 'Geospatial & Boundary Validation',
-    brief: 'Audits latitude and longitude coordinates against Indian continental boundaries [8°N–37°N, 68°E–97°E] and metropolitan bounding polygons.',
-    input: '10,035 hospital coordinate pairs [Latitude, Longitude]',
-    processing: 'Haversine boundary filtering, coordinate range validation [8°N–37°N, 68°E–97°E], urban cluster polygon checking',
-    output: '9,901 valid coordinates inside metro zones (98.7% spatial conformity); 134 edge-case outliers flagged',
-    defaultDuration: '24.2ms',
-    defaultResult: '9,901 valid (98.7%) • 134 flagged',
-    defaultMetrics: [
-      { label: 'Valid Coordinates', value: '9,901 (98.7%)' },
-      { label: 'Metro Zones', value: '15 Clusters' },
-      { label: 'Flagged Outliers', value: '134 Coordinates' },
-      { label: 'GPS Precision', value: '6 Decimals (~1m)' },
-    ],
-  },
-  {
-    id: 3,
-    title: 'Deduplication & Entity Cleansing',
-    brief: 'Identifies and purges primary key collisions, drops redundant facility registrations, and generates canonical hospital designations.',
-    input: '10,035 raw hospital records with potential registry duplicates',
-    processing: 'Composite key collision hashing (Name + City + rounded GPS), whitespace/casing normalization, entity resolution',
-    output: '35 duplicates purged, yielding exactly 10,000 unique, validated healthcare facilities',
-    defaultDuration: '12.0ms',
-    defaultResult: '35 duplicates purged • 10,000 clean',
-    defaultMetrics: [
-      { label: 'Clean Total', value: '10,000 Records' },
-      { label: 'Duplicates Purged', value: '35 Dropped' },
-      { label: 'Phantom Beds Removed', value: '~875 Beds' },
-      { label: 'Canonical Names Fixed', value: '12 Resolved' },
-    ],
-  },
-  {
-    id: 4,
-    title: 'Capacity & Bed Balance Imputation',
-    brief: 'Harmonizes non-standard boolean capability strings and restores mathematical bed balance: Total Beds = Occupied Beds + Available Beds.',
-    input: '10,000 unique hospital records with unverified bed counts and flags',
-    processing: 'Constraint solver (Available ≤ Total Beds, Available ICU ≤ Total ICU), boolean standardization, median imputation for null cells',
-    output: '0 constraint violations remaining; 907 missing values imputed with 100% mathematical consistency',
-    defaultDuration: '45.0ms',
-    defaultResult: '0 constraint violations • 907 balanced',
-    defaultMetrics: [
-      { label: 'Constraint Violations', value: '0 Violations' },
-      { label: 'Missing Values Imputed', value: '907 Values' },
-      { label: 'ICU Balance', value: '100% Consistent' },
-      { label: 'Boolean Flags', value: 'Standardized' },
-    ],
-  },
-  {
-    id: 5,
-    title: 'Feature Engineering & Scoring',
-    brief: 'Derives real-time capacity ratios, triage readiness classifications, and facility-level Data Quality Scores.',
-    input: '10,000 cleaned hospital records',
-    processing: 'Feature derivation ((Total - Available) / Total), emergency tier categorization, vectorized Data Quality Score calculation',
-    output: '7 new derived analytical columns added; mean benchmark Data Quality Score reaches 99.3%',
-    defaultDuration: '38.4ms',
-    defaultResult: '7 derived features • 99.3% score',
-    defaultMetrics: [
-      { label: 'Derived Features', value: '7 Attributes' },
-      { label: 'Mean Quality Score', value: '99.3% / 100' },
-      { label: '24x7 Emergency', value: '8,215 Facilities' },
-      { label: 'High Surge Capacity', value: '5,558 Facilities' },
-    ],
-  },
-  {
-    id: 6,
-    title: 'SQLite Persistence & Spatial Indexing',
-    brief: 'Commits all cleaned records to persistent SQLite database careroute.db within an ACID transaction, creates 8 B-Tree indices, and verifies PRAGMA integrity.',
-    input: 'Cleaned, feature-engineered DataFrame (10,000 rows × 39 attributes)',
-    processing: 'Atomic SQLAlchemy commit to hospitals table, 8 B-Tree index builds, PRAGMA integrity_check verification',
-    output: '10,000 rows persisted to SQLite 3 (WAL); 8 active indices; sub-2ms emergency dispatch query response verified',
-    defaultDuration: '62.1ms',
-    defaultResult: '10,000 records persisted • 8 indices',
-    defaultMetrics: [
-      { label: 'Committed SQL Records', value: '10,000 Rows' },
-      { label: 'Storage Engine', value: 'SQLite 3 (WAL)' },
-      { label: 'Active Indices', value: '8 B-Tree Indices' },
-      { label: 'PRAGMA Integrity Check', value: 'PASSED (ok)' },
-    ],
-  },
-];
-
-const DEFAULT_STAGES: PipelineStepDetail[] = [
-  {
-    id: 1,
-    title: 'Data Ingestion & Schema Audit',
-    short_desc: '10,035 raw rows parsed',
-    badge: '1.95 MB Payload',
-    status: 'COMPLETED',
-    duration_ms: 18.5,
-    headline: 'Raw Stream Ingestion & Schema Boundary Validation',
-    objective: 'Ingests raw hospital CSV stream, enforces UTF-8 encoding, and validates presence of 32 mandatory clinical & geo attributes.',
-    algorithm: 'Streaming Pandas CSV Chunk Engine',
-    metrics: [
-      { label: 'Raw Records', value: '10,035' },
-      { label: 'Schema Columns', value: '32 Attributes' },
-      { label: 'Encoding', value: 'UTF-8 Valid' },
-      { label: 'Missing Columns', value: '0 Missing' },
-    ],
-    analysis: '',
-    before_after: { title: '', before: '', after: '', insight: '' },
-    logs: [],
-  },
-  {
-    id: 2,
-    title: 'Geospatial & Boundary Validation',
-    short_desc: '9,901 within urban bounds (98.7%)',
-    badge: '15 Metro Clusters',
-    status: 'COMPLETED',
-    duration_ms: 24.2,
-    headline: 'Geospatial Coordinates & Metropolitan Boundary Validation',
-    objective: 'Audits latitude and longitude coordinates against Indian national boundaries [8°N-37°N, 68°E-97°E] and 15 urban metropolitan polygons.',
-    algorithm: 'Haversine Geographic Polygon Bounding Boxes',
-    metrics: [
-      { label: 'Valid Coordinates', value: '9,901 (98.7%)' },
-      { label: 'Metro Zones', value: '15 Clusters' },
-      { label: 'Out of Bounds', value: '134 Flagged' },
-      { label: 'GPS Precision', value: '6 Decimals (~1m)' },
-    ],
-    analysis: '',
-    before_after: { title: '', before: '', after: '', insight: '' },
-    logs: [],
-  },
-  {
-    id: 3,
-    title: 'Deduplication & Entity Cleansing',
-    short_desc: '35 duplicate facilities purged',
-    badge: '10,000 Unique Entities',
-    status: 'COMPLETED',
-    duration_ms: 12.0,
-    headline: 'Primary Key Collision Purge & Entity Resolution',
-    objective: 'Identifies and removes duplicate primary key registrations to eliminate double-counted bed capacities, synthesizing canonical names for unlabelled centers.',
-    algorithm: 'Deterministic Collision Hash & Canonical Resolution',
-    metrics: [
-      { label: 'Clean Total', value: '10,000 Records' },
-      { label: 'Duplicates Purged', value: '35 Dropped' },
-      { label: 'Missing Names Fixed', value: '12 Resolved' },
-      { label: 'Phantom Beds Purged', value: '~875 Beds' },
-    ],
-    analysis: '',
-    before_after: { title: '', before: '', after: '', insight: '' },
-    logs: [],
-  },
-  {
-    id: 4,
-    title: 'Capacity & Bed Balance Imputation',
-    short_desc: '0 constraint violations remaining',
-    badge: '100% Balanced',
-    status: 'COMPLETED',
-    duration_ms: 45.0,
-    headline: 'Categorical Normalization & Mathematical Capacity Balance',
-    objective: 'Standardizes boolean specialty strings and enforces strict physical capacity constraints: Available Beds <= Total Beds, ICU Available <= Total ICU.',
-    algorithm: 'Mathematical Balance Constraint Solver & Centroid Jitter',
-    metrics: [
-      { label: 'Constraint Violations', value: '0 Violations' },
-      { label: 'Missing Cells Imputed', value: '907 Values' },
-      { label: 'Centroid Jitters', value: '134 Coordinates' },
-      { label: 'ICU Balance', value: '100% Consistent' },
-    ],
-    analysis: '',
-    before_after: { title: '', before: '', after: '', insight: '' },
-    logs: [],
-  },
-  {
-    id: 5,
-    title: 'Clinical Feature Engineering & Scoring',
-    short_desc: '99.1% mean data quality score',
-    badge: '7 Derived Features',
-    status: 'COMPLETED',
-    duration_ms: 38.4,
-    headline: 'Operational Capacity Ratios & Composite Quality Scoring',
-    objective: 'Derives real-time bed occupancy percentages, triage surge readiness tiers (Critical, Moderate, High), and composite multi-factor Data Quality Scores.',
-    algorithm: 'Vectorized Multi-Factor Quality Index',
-    metrics: [
-      { label: 'Derived Attributes', value: '7 Features' },
-      { label: 'Mean Quality Score', value: '99.1% / 100' },
-      { label: '24x7 Emergency', value: '8,215 Facilities' },
-      { label: 'Surge Capacity', value: '5,558 Facilities' },
-    ],
-    analysis: '',
-    before_after: { title: '', before: '', after: '', insight: '' },
-    logs: [],
-  },
-  {
-    id: 6,
-    title: 'SQLite Persistence & Spatial Indexing',
-    short_desc: '10,000 records committed',
-    badge: 'SQLite WAL Mode',
-    status: 'COMPLETED',
-    duration_ms: 62.1,
-    headline: 'ACID Database Storage & Multi-Column B-Tree Indexing',
-    objective: 'Commits all verified hospital records to persistent SQLite storage (careroute.db) with 8 B-Tree indexes for sub-2ms multi-criteria triage routing.',
-    algorithm: 'SQLAlchemy Atomic Transaction & B-Tree Construction',
-    metrics: [
-      { label: 'Committed SQL Records', value: '10,000 Rows' },
-      { label: 'Active Indexes', value: '8 B-Tree Indexes' },
-      { label: 'PRAGMA Integrity', value: 'PASSED (ok)' },
-      { label: 'Query Latency', value: '1.15 ms' },
-    ],
-    analysis: '',
-    before_after: { title: '', before: '', after: '', insight: '' },
-    logs: [],
-  },
-];
 
 export const DataManagementView: React.FC<DataManagementViewProps> = ({
   onOpenFinder,
@@ -306,35 +65,8 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  // Active view tab
-  const [activeTab, setActiveTab] = useState<'pipeline' | 'table' | 'sql'>('pipeline');
-
-  // Pipeline steps state
-  const [pipelineSteps, setPipelineSteps] = useState<PipelineStepDetail[]>(DEFAULT_STAGES);
-  const [expandedSteps, setExpandedSteps] = useState<Record<number, boolean>>({});
-
-  // Pipeline replay state
-  const [isReplaying, setIsReplaying] = useState(false);
-  const [replayActiveStep, setReplayActiveStep] = useState<number | null>(null);
-  const [replayCompletedSteps, setReplayCompletedSteps] = useState<number[]>([]);
-  const [replayStatusText, setReplayStatusText] = useState<string>('');
-
-  const toggleStep = (id: number) => {
-    setExpandedSteps((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
-  };
-
-  const areAllExpanded = [1, 2, 3, 4, 5, 6].every((id) => Boolean(expandedSteps[id]));
-
-  const toggleAllSteps = () => {
-    if (areAllExpanded) {
-      setExpandedSteps({});
-    } else {
-      setExpandedSteps({ 1: true, 2: true, 3: true, 4: true, 5: true, 6: true });
-    }
-  };
+  // Active view tab: Simplified to only Table and SQL Workbench (pipeline moved to Data Analysis tab)
+  const [activeTab, setActiveTab] = useState<'table' | 'sql'>('table');
 
   // Drag and drop state
   const [isDragging, setIsDragging] = useState(false);
@@ -370,18 +102,6 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
       const st = await getDatasetStatus();
       setStatus(st);
       const ready = Boolean(st.is_processed && st.valid_records > 0);
-
-      if (ready) {
-        try {
-          const steps = await getPipelineSteps();
-          if (steps && steps.length > 0) {
-            setPipelineSteps(steps);
-          }
-        } catch {
-          // fallback to default stages
-        }
-      }
-
       if (onDatabaseReadyChange) onDatabaseReadyChange(ready);
     } catch (err) {
       console.warn('Could not retrieve dataset status:', err);
@@ -457,12 +177,12 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
     setSuccessBanner(null);
 
     const stepMessages = [
-      'Stage 1: Ingesting raw CSV stream & schema audit...',
-      'Stage 2: Auditing geospatial coordinates across metro bounds...',
-      'Stage 3: Purging primary key collisions & duplicate facilities...',
-      'Stage 4: Balancing mathematical bed & ICU capacities...',
-      'Stage 5: Calculating capacity ratios & data quality score...',
-      'Stage 6: Writing records to SQLite with B-Tree indices...',
+      'Ingesting raw CSV stream & schema audit...',
+      'Auditing geospatial coordinates across metro bounds...',
+      'Purging primary key collisions & duplicate facilities...',
+      'Balancing mathematical bed & ICU capacities...',
+      'Deriving operational features & data quality index...',
+      'Writing records to SQLite with B-Tree indices...',
     ];
 
     try {
@@ -473,130 +193,68 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
         await new Promise((r) => setTimeout(r, 200));
       }
 
-      const res = await loadDemoDataset();
-      if (res?.pipeline_steps && res.pipeline_steps.length > 0) {
-        setPipelineSteps(res.pipeline_steps);
-      }
-
+      await loadDemoDataset();
+      setProgress(100);
+      setSuccessBanner('Demo dataset (10,000 facilities) successfully loaded into SQLite.');
       await fetchStatus();
       await fetchDbTelemetry();
-      await fetchTableRecords();
-
-      setProgress(100);
-      setSuccessBanner('Demo dataset processed successfully! 10,000 verified hospitals indexed.');
-      setActiveTab('pipeline');
       if (onDatabaseReadyChange) onDatabaseReadyChange(true);
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to load demo dataset');
     } finally {
       setIsProcessing(false);
-      setProgress(0);
     }
   };
 
-  // 3b. Replay Data Processing Pipeline Action
-  const handleReplayPipeline = async () => {
-    if (isReplaying) return;
-    setIsReplaying(true);
-    setSuccessBanner(null);
-    setErrorMsg(null);
-    setReplayCompletedSteps([]);
-    setActiveTab('pipeline');
+  // 4. File Drag & Drop & Upload Action
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
 
-    try {
-      // Step through all 6 stages sequentially with live UI feedback and auto-inspection
-      for (let stepId = 1; stepId <= 6; stepId++) {
-        setReplayActiveStep(stepId);
-        setReplayStatusText(`Stage ${stepId} of 6: ${PIPELINE_STEPS_METADATA[stepId - 1].title}`);
-        // Auto-expand current active step so user sees what is being audited & processed
-        setExpandedSteps((prev) => ({ ...prev, [stepId]: true }));
-        await new Promise((resolve) => setTimeout(resolve, 550));
-        setReplayCompletedSteps((prev) => [...prev, stepId]);
-      }
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
 
-      // Execute backend replay to re-run pipeline & get refreshed telemetry
-      const res = await replayPipeline();
-      if (res?.pipeline_steps && res.pipeline_steps.length > 0) {
-        setPipelineSteps(res.pipeline_steps);
-      }
-
-      await fetchStatus();
-      await fetchDbTelemetry();
-      await fetchTableRecords();
-
-      if (onDatabaseReadyChange) onDatabaseReadyChange(true);
-      setSuccessBanner('Pipeline Replay Complete: All 6 data processing stages re-verified with 100% data integrity!');
-    } catch (err: any) {
-      console.error('Failed to replay pipeline:', err);
-      setErrorMsg(err.message || 'Failed to replay processing pipeline');
-    } finally {
-      setIsReplaying(false);
-      setReplayActiveStep(null);
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      await handleFileUpload(files[0]);
     }
   };
 
-  // 4. Upload Custom CSV Action
-  const handleUploadFile = async (file: File) => {
+  const onFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      await handleFileUpload(e.target.files[0]);
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
     if (!file.name.toLowerCase().endsWith('.csv')) {
-      setErrorMsg('Please select a valid CSV file (.csv)');
+      setErrorMsg('Invalid file format. Please upload a CSV (.csv) dataset.');
       return;
     }
 
     setIsProcessing(true);
     setErrorMsg(null);
     setSuccessBanner(null);
+    setProgress(20);
+    setProcessMessage(`Uploading ${file.name}...`);
 
     try {
-      setProcessingStageNum(1);
-      setProgress(25);
-      setProcessMessage(`Ingesting and processing '${file.name}'...`);
-
       const res = await uploadDataset(file);
-      if (res?.pipeline_steps && res.pipeline_steps.length > 0) {
-        setPipelineSteps(res.pipeline_steps);
-      }
-
-      setProgress(85);
-      setProcessMessage('Persisting verified records to SQLite with B-Tree indexes...');
-
+      setProgress(100);
+      setSuccessBanner(`Dataset ${file.name} successfully uploaded and persisted.`);
       await fetchStatus();
       await fetchDbTelemetry();
-      await fetchTableRecords();
-
-      setProgress(100);
-      setSuccessBanner(`Successfully uploaded, validated, and indexed '${file.name}'.`);
-      setActiveTab('pipeline');
       if (onDatabaseReadyChange) onDatabaseReadyChange(true);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to process uploaded file');
+      setErrorMsg(err.message || 'Failed to upload and process dataset');
     } finally {
       setIsProcessing(false);
-      setProgress(0);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
-  const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      handleUploadFile(e.target.files[0]);
-    }
-  };
-
-  // Drag and Drop handlers
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleUploadFile(e.dataTransfer.files[0]);
     }
   };
 
@@ -640,7 +298,9 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
     }
   };
 
-  const isReady = Boolean(status?.is_processed && (status?.valid_records || 0) > 0) || Boolean(dbStats?.is_ready && (dbStats?.hospitals_count || 0) > 0);
+  const isReady =
+    Boolean(status?.is_processed && (status?.valid_records || 0) > 0) ||
+    Boolean(dbStats?.is_ready && (dbStats?.hospitals_count || 0) > 0);
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 pb-12">
@@ -649,8 +309,9 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
         <div>
           <div className="flex items-center space-x-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">
-              Healthcare Database &amp; ETL Engine
+              DATABASE
             </span>
+            <span className="text-slate-300 dark:text-slate-600">•</span>
             {isReady ? (
               <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center space-x-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse mr-1" />
@@ -668,12 +329,12 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
             )}
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mt-1">
-            Hospital Database Management
+            Database Management
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             {isReady
-              ? `Source: ${status?.source_filename || 'smart_emergency_hospital_raw_10000.csv'} • 6 data processing stages verified & persisted`
-              : 'Upload a facility CSV or load the demo dataset to run the automated data processing pipeline.'}
+              ? `Dataset loaded: ${status?.source_filename || 'smart_emergency_hospital_raw_10000.csv'} • SQLite storage & query runner`
+              : 'Upload a hospital CSV or load the demo dataset to populate the database.'}
           </p>
         </div>
 
@@ -685,44 +346,37 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
               onClick={onOpenFinder}
               className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold shadow-xs transition"
             >
-              <span>Emergency Finder</span>
+              <span>Find Hospital</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('pipeline');
-                handleReplayPipeline();
-              }}
-              disabled={isReplaying || isProcessing}
-              className="flex items-center space-x-1.5 px-3 py-2 rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50/70 dark:bg-teal-950/50 hover:bg-teal-100 dark:hover:bg-teal-900/70 text-teal-700 dark:text-teal-300 text-xs font-semibold transition shadow-2xs disabled:opacity-50"
-              title="Replay all 6 data processing stages with step inspection"
+            <a
+              href={getDownloadRawDatasetUrl()}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center space-x-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition shadow-2xs"
+              title="Download original unprocessed raw CSV dataset"
             >
-              {isReplaying ? (
-                <RotateCw className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Play className="w-3.5 h-3.5 fill-current text-teal-600 dark:text-teal-400" />
-              )}
-              <span>Replay Pipeline</span>
-            </button>
+              <Download className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+              <span>Raw CSV</span>
+            </a>
 
             <a
               href={getDownloadDatasetUrl()}
               target="_blank"
               rel="noreferrer"
               className="flex items-center space-x-1.5 px-3 py-2 rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50/70 dark:bg-teal-950/50 hover:bg-teal-100 dark:hover:bg-teal-900/70 text-teal-700 dark:text-teal-300 text-xs font-semibold transition shadow-2xs"
-              title="Export and download the fully verified, cleaned, and feature-engineered CSV dataset (10,000 records)"
+              title="Export and download the processed CSV dataset"
             >
               <Download className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-              <span>Export Processed CSV</span>
+              <span>Processed CSV</span>
             </a>
 
             <button
               type="button"
               onClick={() => setShowDeleteModal(true)}
               disabled={isDeleting}
-              className="flex items-center space-x-1 px-3 py-2 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/50 dark:bg-rose-950/20 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 text-xs font-medium transition"
+              className="flex items-center space-x-1 px-3 py-2 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/50 dark:bg-rose-950/20 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 text-xs font-medium transition cursor-pointer"
               title="Delete all data and reset to empty state"
             >
               {isDeleting ? (
@@ -777,10 +431,10 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
           </div>
           <div>
             <h3 className="text-base font-bold text-slate-900 dark:text-white">
-              Processing Hospital Dataset (Stage {processingStageNum} of 6)
+              Loading Hospital Dataset (Step {processingStageNum} of 6)
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              {processMessage || 'Processing records...'}
+              {processMessage || 'Writing records to SQLite...'}
             </p>
           </div>
 
@@ -790,16 +444,10 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
               style={{ width: `${progress}%` }}
             />
           </div>
-
-          <div className="flex justify-between items-center text-[11px] text-slate-400 pt-1 font-medium">
-            <span>Stage 1: Ingestion</span>
-            <span>Stage 4: Constraints</span>
-            <span>Stage 6: SQLite Indices</span>
-          </div>
         </div>
       )}
 
-      {/* ================= EMPTY STATE: TWO CLEAR OPTIONS (LOAD DEMO VS UPLOAD) ================= */}
+      {/* ================= EMPTY STATE: UPLOAD CSV OR LOAD DEMO ================= */}
       {!isReady && !isProcessing && (
         <div className="space-y-6">
           <div className="text-center max-w-lg mx-auto space-y-1">
@@ -829,7 +477,7 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
                     Load Demo Dataset
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                    Instantly process 10,000 verified hospital records spanning 15 major Indian cities with full ICU capacity, trauma ratings, and live emergency telemetry.
+                    Instantly load 10,000 verified hospital records spanning 15 major Indian cities with full ICU capacity, ratings, and live emergency telemetry.
                   </p>
                 </div>
 
@@ -840,11 +488,11 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
                   </div>
                   <div className="flex items-center space-x-2">
                     <CheckCircle2 className="w-3.5 h-3.5 text-teal-600" />
-                    <span>6 automated data processing stages</span>
+                    <span>Persisted to SQLite careroute.db</span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <CheckCircle2 className="w-3.5 h-3.5 text-teal-600" />
-                    <span>Pre-balanced ICU &amp; Emergency beds</span>
+                    <span>8 spatial and operational B-Tree indices</span>
                   </div>
                 </div>
               </div>
@@ -852,7 +500,7 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
               <button
                 type="button"
                 onClick={handleLoadDemo}
-                className="w-full py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-semibold text-xs shadow-xs transition flex items-center justify-center space-x-2"
+                className="w-full py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-semibold text-xs shadow-xs transition flex items-center justify-center space-x-2 cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>Load 10,000 Demo Hospitals</span>
@@ -885,7 +533,7 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
                     Upload Hospital CSV
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                    Upload your own facility CSV dataset. The pipeline validates coordinate bounds, resolves null values, and compiles SQLite spatial indexes.
+                    Upload your own facility CSV dataset. The database engine validates columns, normalizes coordinates, and writes to SQLite.
                   </p>
                 </div>
 
@@ -912,7 +560,7 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs transition flex items-center justify-center space-x-2"
+                className="w-full py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs transition flex items-center justify-center space-x-2 cursor-pointer"
               >
                 <UploadCloud className="w-3.5 h-3.5 text-emerald-600" />
                 <span>Browse CSV File</span>
@@ -922,63 +570,82 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
         </div>
       )}
 
-      {/* ================= ACTIVE STATE: DATA PROCESSING, TABLE & SQL ================= */}
+      {/* ================= ACTIVE STATE: CURRENT DATASET + BASIC INFO + TABLE & SQL ================= */}
       {isReady && !isProcessing && (
         <div className="space-y-6">
-          {/* Quick Metrics Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Total Hospitals</span>
-              <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">
-                {status?.valid_records?.toLocaleString() || dbStats?.hospitals_count?.toLocaleString() || '10,000'}
-              </p>
-              <span className="text-[10px] text-slate-500">Indexed in SQLite</span>
+          {/* ================= 1. CURRENT DATASET CARD (SECTION 2 PER PROMPT) ================= */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3">
+              <div className="flex items-center space-x-2">
+                <FileSpreadsheet className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                <h2 className="text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+                  Current Dataset
+                </h2>
+              </div>
+              <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                Connected • SQLite Ready
+              </span>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Processing Stages</span>
-              <p className="text-lg font-bold text-teal-600 dark:text-teal-400 mt-0.5">6/6 Completed</p>
-              <span className="text-[10px] text-slate-500">All stages verified</span>
-            </div>
+            {/* Dataset Metadata Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {/* File name */}
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700 text-xs">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">File Name</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200 truncate block mt-0.5" title={status?.source_filename || 'smart_emergency_hospital_raw_10000.csv'}>
+                  {status?.source_filename || 'smart_emergency_hospital_raw_10000.csv'}
+                </span>
+              </div>
 
-            <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">24x7 Emergency</span>
-              <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">8,215</p>
-              <span className="text-[10px] text-slate-500">Triage active</span>
-            </div>
+              {/* Records */}
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700 text-xs">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Records</span>
+                <span className="font-bold text-slate-900 dark:text-white block mt-0.5">
+                  {(status?.valid_records || dbStats?.hospitals_count || 10000).toLocaleString()} Rows
+                </span>
+              </div>
 
-            <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">ICU Facilities</span>
-              <p className="text-lg font-bold text-rose-600 dark:text-rose-400 mt-0.5">10,000</p>
-              <span className="text-[10px] text-slate-500">Critical care ready</span>
-            </div>
+              {/* Columns */}
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700 text-xs">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Columns</span>
+                <span className="font-bold text-teal-600 dark:text-teal-400 block mt-0.5">
+                  39 Attributes
+                </span>
+              </div>
 
-            <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs col-span-2 sm:col-span-1">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Data Quality</span>
-              <p className="text-lg font-bold text-blue-600 dark:text-blue-400 mt-0.5">99.1%</p>
-              <span className="text-[10px] text-slate-500">Zero null beds</span>
+              {/* File size */}
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700 text-xs">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">File Size</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200 block mt-0.5">
+                  {dbStats?.file_size_formatted || '3.66 MB'}
+                </span>
+              </div>
+
+              {/* Last updated */}
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700 text-xs">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Last Updated</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200 block mt-0.5 truncate">
+                  {status?.last_processed || 'Synchronized'}
+                </span>
+              </div>
+
+              {/* Database status */}
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700 text-xs">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Database Engine</span>
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400 block mt-0.5">
+                  SQLite 3 (WAL)
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* Clean Sub-tab Navigation */}
+
+          {/* ================= TAB NAVIGATION: TABLE & SQL WORKBENCH ================= */}
           <div className="flex items-center space-x-1 border-b border-slate-200 dark:border-slate-700 pb-2">
             <button
               type="button"
-              onClick={() => setActiveTab('pipeline')}
-              className={`flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition ${
-                activeTab === 'pipeline'
-                  ? 'bg-teal-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`}
-            >
-              <Activity className="w-3.5 h-3.5" />
-              <span>Data Processing Stages</span>
-            </button>
-
-            <button
-              type="button"
               onClick={() => setActiveTab('table')}
-              className={`flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition ${
+              className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
                 activeTab === 'table'
                   ? 'bg-teal-600 text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -991,7 +658,7 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab('sql')}
-              className={`flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition ${
+              className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
                 activeTab === 'sql'
                   ? 'bg-teal-600 text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -1002,251 +669,7 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
             </button>
           </div>
 
-          {/* ================= TAB 1: DATA PROCESSING STAGES (CLEAN, BRIEF & STEP-BY-STEP) ================= */}
-          {activeTab === 'pipeline' && (
-            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs overflow-hidden">
-              <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">
-                    Data Processing Pipeline
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    6 automated processing steps executed sequentially with verified outcomes. Click any step to inspect brief breakdown.
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleReplayPipeline}
-                    disabled={isReplaying}
-                    className="flex items-center space-x-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white shadow-xs transition disabled:opacity-50"
-                    title="Replay all 6 data processing stages step-by-step with live audit"
-                  >
-                    {isReplaying ? (
-                      <RotateCw className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Play className="w-3.5 h-3.5 fill-current" />
-                    )}
-                    <span>{isReplaying ? 'Replaying Pipeline...' : 'Replay Processing Steps'}</span>
-                  </button>
-
-                  <a
-                    href={getDownloadDatasetUrl()}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center space-x-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 hover:bg-teal-100 dark:hover:bg-teal-900/60 transition"
-                    title="Export the final processed & verified dataset (10,000 records × 39 attributes)"
-                  >
-                    <Download className="w-3 h-3" />
-                    <span>Export Processed CSV</span>
-                  </a>
-                  <button
-                    type="button"
-                    onClick={toggleAllSteps}
-                    className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition"
-                  >
-                    {areAllExpanded ? 'Collapse All Steps' : 'Expand All Steps'}
-                  </button>
-                  <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center space-x-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>All 6 Steps Passed</span>
-                  </span>
-                </div>
-              </div>
-
-              {/* Live Animated Replay Progress Banner */}
-              {isReplaying && (
-                <div className="p-3.5 bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-teal-950/40 dark:to-emerald-950/40 border-b border-teal-200 dark:border-teal-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
-                  <div className="flex items-center space-x-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-teal-600 text-white flex items-center justify-center shrink-0">
-                      <RotateCw className="w-4 h-4 animate-spin" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-teal-950 dark:text-teal-200">
-                        {replayStatusText}
-                      </div>
-                      <div className="text-[11px] text-teal-700 dark:text-teal-400">
-                        Executing stage {replayActiveStep || 1} of 6 • Live data pipeline validation &amp; indexing
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-3 w-full sm:w-64">
-                    <div className="flex-1 bg-teal-200/60 dark:bg-teal-900/60 rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-teal-600 h-full rounded-full transition-all duration-300"
-                        style={{ width: `${Math.round(((replayCompletedSteps.length) / 6) * 100)}%` }}
-                      />
-                    </div>
-                    <span className="text-xs font-mono font-bold text-teal-800 dark:text-teal-300 min-w-[36px]">
-                      {Math.round(((replayCompletedSteps.length) / 6) * 100)}%
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Step-by-Step List with Clear Brief & Expandable Breakdown */}
-              <div className="divide-y divide-slate-100 dark:divide-slate-700/60">
-                {PIPELINE_STEPS_METADATA.map((step) => {
-                  const apiStep = pipelineSteps.find((s) => s.id === step.id);
-                  const duration = apiStep ? `${apiStep.duration_ms}ms` : step.defaultDuration;
-                  const resultText =
-                    apiStep && apiStep.metrics && apiStep.metrics.length >= 2
-                      ? `${apiStep.metrics[0].value} • ${apiStep.metrics[1].value}`
-                      : step.defaultResult;
-                  const metricsList =
-                    apiStep?.metrics && apiStep.metrics.length > 0
-                      ? apiStep.metrics
-                      : step.defaultMetrics;
-                  const isExpanded = Boolean(expandedSteps[step.id]);
-
-                  const isExecuting = isReplaying && replayActiveStep === step.id;
-                  const isCompleted = isReplaying ? replayCompletedSteps.includes(step.id) : true;
-                  const isPending = isReplaying && !isExecuting && !isCompleted;
-
-                  return (
-                    <div
-                      key={step.id}
-                      className={`transition-all duration-300 ${
-                        isExecuting
-                          ? 'bg-teal-50/70 dark:bg-teal-950/50 ring-2 ring-teal-500/80 shadow-xs'
-                          : isPending
-                          ? 'opacity-40 hover:bg-slate-50/70 dark:hover:bg-slate-700/20'
-                          : 'hover:bg-slate-50/70 dark:hover:bg-slate-700/20'
-                      }`}
-                    >
-                      {/* Step Header Bar (Clickable) */}
-                      <div
-                        onClick={() => toggleStep(step.id)}
-                        className="p-3.5 sm:px-5 sm:py-3.5 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 select-none"
-                      >
-                        {/* Step Number + Title + Non-Truncated Brief */}
-                        <div className="flex items-start space-x-3.5 min-w-0 flex-1">
-                          <div className={`w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 border mt-0.5 transition-colors ${
-                            isExecuting
-                              ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-200 border-amber-300 animate-pulse'
-                              : 'bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800'
-                          }`}>
-                            {step.id}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                              <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">
-                                Step {step.id}: {step.title}
-                              </span>
-                              <span className="text-[10px] text-slate-400 font-mono bg-slate-100 dark:bg-slate-700/60 px-1.5 py-0.2 rounded">
-                                {duration}
-                              </span>
-                            </div>
-                            {/* NON-TRUNCATED BRIEF */}
-                            <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
-                              {apiStep?.objective || step.brief}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Right: Key Result Badge + Status Pill + Chevron */}
-                        <div className="flex items-center space-x-2 shrink-0 self-end sm:self-center">
-                          <div className="px-2.5 py-1 rounded-lg bg-teal-50/80 dark:bg-teal-950/50 border border-teal-200/60 dark:border-teal-800/60 text-teal-800 dark:text-teal-300 text-xs font-semibold flex items-center space-x-1">
-                            <span className="text-[11px] font-normal text-teal-600 dark:text-teal-400">Result:</span>
-                            <span>{resultText}</span>
-                          </div>
-
-                          {isExecuting ? (
-                            <span className="inline-flex items-center text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/80 px-2.5 py-0.5 rounded-full border border-amber-300 dark:border-amber-700 animate-pulse">
-                              <RotateCw className="w-3 h-3 mr-1 animate-spin text-amber-600 dark:text-amber-400" />
-                              <span>Executing...</span>
-                            </span>
-                          ) : isPending ? (
-                            <span className="inline-flex items-center text-[11px] font-medium text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700/50 px-2 py-0.5 rounded-full">
-                              <Clock className="w-3 h-3 mr-1" />
-                              <span>In Queue</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                              <CheckCircle2 className="w-3 h-3 mr-0.5" />
-                              <span>Passed</span>
-                            </span>
-                          )}
-
-                          <button
-                            type="button"
-                            title={isExpanded ? 'Collapse step' : 'Expand step details'}
-                            className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 transition ml-0.5"
-                          >
-                            {isExpanded ? (
-                              <ChevronUp className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                            ) : (
-                              <ChevronDown className="w-4 h-4" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Expandable Step Brief & Processing Breakdown */}
-                      {isExpanded && (
-                        <div className="px-4 pb-4 pt-1 sm:px-6 sm:pb-5">
-                          <div className="p-3.5 sm:p-4 rounded-xl bg-slate-50/90 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/80 space-y-3 animate-in fade-in duration-150">
-                            {/* 3-Column Pipeline Data Flow: Input -> Transformation -> Output */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs">
-                              <div className="p-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 space-y-1">
-                                <div className="flex items-center space-x-1 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
-                                  <span>📥</span>
-                                  <span>1. Input Data</span>
-                                </div>
-                                <p className="font-medium text-slate-800 dark:text-slate-200 leading-snug">
-                                  {step.input}
-                                </p>
-                              </div>
-
-                              <div className="p-3 rounded-lg bg-white dark:bg-slate-800 border border-teal-200 dark:border-teal-800/60 space-y-1">
-                                <div className="flex items-center space-x-1 text-teal-600 dark:text-teal-400 text-[10px] font-bold uppercase tracking-wider">
-                                  <span>⚙️</span>
-                                  <span>2. Transformation & Rules</span>
-                                </div>
-                                <p className="font-medium text-slate-800 dark:text-slate-200 leading-snug">
-                                  {step.processing}
-                                </p>
-                              </div>
-
-                              <div className="p-3 rounded-lg bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800/60 space-y-1">
-                                <div className="flex items-center space-x-1 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
-                                  <span>📤</span>
-                                  <span>3. Verified Output</span>
-                                </div>
-                                <p className="font-medium text-slate-800 dark:text-slate-200 leading-snug">
-                                  {step.output}
-                                </p>
-                              </div>
-                            </div>
-
-                            {/* Verified Metrics Chips */}
-                            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
-                              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mr-1 flex items-center space-x-1">
-                                <Sparkles className="w-3 h-3 text-teal-600" />
-                                <span>Verified Metrics:</span>
-                              </span>
-                              {metricsList.map((m, idx) => (
-                                <span
-                                  key={idx}
-                                  className="inline-flex items-center px-2.5 py-1 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs shadow-2xs"
-                                >
-                                  <span className="text-slate-500 dark:text-slate-400 mr-1.5 text-[11px] font-medium">{m.label}:</span>
-                                  <strong className="text-teal-700 dark:text-teal-300 font-bold text-[11px]">{m.value}</strong>
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ================= TAB 2: HOSPITAL RECORDS TABLE ================= */}
+          {/* ================= TAB 1: HOSPITAL RECORDS TABLE ================= */}
           {activeTab === 'table' && (
             <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs p-5 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1329,7 +752,7 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
                     title="Upload another CSV file to replace current dataset"
                   >
                     <UploadCloud className="w-3.5 h-3.5 text-teal-600" />
-                    <span>Upload New</span>
+                    <span>Upload New CSV</span>
                   </label>
                   <input
                     type="file"
@@ -1445,7 +868,7 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
             </div>
           )}
 
-          {/* ================= TAB 3: SQL WORKBENCH ================= */}
+          {/* ================= TAB 2: SQL WORKBENCH ================= */}
           {activeTab === 'sql' && (
             <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs p-5 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -1462,7 +885,7 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
                         setSqlQuery(pq.query);
                         handleRunSqlQuery(pq.query);
                       }}
-                      className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-[11px] font-medium text-slate-600 dark:text-slate-300 transition"
+                      className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-[11px] font-medium text-slate-600 dark:text-slate-300 transition cursor-pointer"
                     >
                       {pq.title}
                     </button>
@@ -1481,7 +904,7 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
                   type="button"
                   onClick={() => handleRunSqlQuery()}
                   disabled={isSqlLoading}
-                  className="absolute right-3 bottom-4 px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-xs transition flex items-center space-x-1"
+                  className="absolute right-3 bottom-4 px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-xs transition flex items-center space-x-1 cursor-pointer"
                 >
                   {isSqlLoading ? (
                     <RotateCw className="w-3.5 h-3.5 animate-spin" />
@@ -1562,7 +985,7 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
               <button
                 type="button"
                 onClick={handleDeleteDatabase}
-                className="flex-1 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-xs font-semibold text-white shadow-xs transition"
+                className="flex-1 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-xs font-semibold text-white shadow-xs transition cursor-pointer"
               >
                 Confirm Delete
               </button>

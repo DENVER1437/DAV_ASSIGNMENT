@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { MapPin, Moon, Sun, Database, Search, Building2 } from 'lucide-react';
+import { MapPin, Moon, Sun, Database, Search, Building2, BarChart3 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface NavbarProps {
-  currentTab: 'finder' | 'results' | 'database';
-  setCurrentTab: (tab: 'finder' | 'results' | 'database') => void;
+  currentTab: 'finder' | 'results' | 'database' | 'analysis';
+  setCurrentTab: (tab: 'finder' | 'results' | 'database' | 'analysis') => void;
   detectedLocality?: string | null;
   onDetectLocation?: () => void;
   isDatabaseReady: boolean;
@@ -83,6 +83,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
+          {/* Database Tab */}
           <button
             type="button"
             onClick={() => setCurrentTab('database')}
@@ -97,6 +98,20 @@ export const Navbar: React.FC<NavbarProps> = ({
             {!isDatabaseReady && (
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" title="Database requires initialization" />
             )}
+          </button>
+
+          {/* Data Analysis Tab: Immediately AFTER Database */}
+          <button
+            type="button"
+            onClick={() => setCurrentTab('analysis')}
+            className={`relative flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${
+              currentTab === 'analysis'
+                ? 'text-teal-700 dark:text-teal-300 bg-teal-50/80 dark:bg-teal-950/40 border border-teal-200/80 dark:border-teal-800/60 shadow-2xs font-bold'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/60'
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span>Data Analysis</span>
           </button>
         </nav>
 

@@ -29,6 +29,21 @@ class HospitalService:
         if pipeline_instance.processed_df is not None and not pipeline_instance.processed_df.empty:
             self._df = pipeline_instance.processed_df
             return True
+        # Auto-load processed dataset if it exists on disk
+        if settings.DATASET_PROCESSED_PATH.exists():
+            try:
+                self._df = pd.read_csv(settings.DATASET_PROCESSED_PATH)
+                pipeline_instance.processed_df = self._df.copy()
+                return True
+            except Exception:
+                pass
+        # Auto-load raw dataset if processed does not exist
+        if settings.DATASET_RAW_PATH.exists():
+            try:
+                df_proc, _, _ = self.load_demo_dataset()
+                return not df_proc.empty
+            except Exception:
+                pass
         return False
 
     def get_df(self) -> pd.DataFrame:

@@ -17,13 +17,8 @@ logger = logging.getLogger("careroute")
 async def lifespan(app: FastAPI):
     try:
         Base.metadata.create_all(bind=engine)
-        # Auto-load demo dataset on server startup so the application is ready immediately
         from .services.hospital_service import hospital_service
-        if not hospital_service.is_ready():
-            if settings.DATASET_RAW_PATH.exists():
-                logger.info("Auto-loading bundled dataset into SQLite & memory cache...")
-                hospital_service.load_demo_dataset()
-                logger.info("Dataset auto-loaded successfully (10,000 records ready).")
+        hospital_service.is_ready()
     except Exception as e:
         logger.warning(f"Database schema/data init note: {e}")
 

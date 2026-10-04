@@ -192,3 +192,21 @@ def download_processed_csv():
         media_type="text/csv",
         filename="smart_emergency_hospital_processed_clean.csv"
     )
+
+@router.get("/download-raw")
+@router.get("/download/raw")
+def download_raw_csv():
+    """Export and download the original, unprocessed raw CSV dataset."""
+    raw_path = settings.DATASET_RAW_PATH
+    if not raw_path.exists():
+        fallback_root = settings.BASE_DIR.parent / "smart_emergency_hospital_raw_10000.csv"
+        if fallback_root.exists():
+            raw_path = fallback_root
+        else:
+            raise HTTPException(status_code=404, detail="Raw dataset file not found in repository.")
+
+    return FileResponse(
+        path=raw_path,
+        media_type="text/csv",
+        filename="smart_emergency_hospital_raw_10000.csv"
+    )

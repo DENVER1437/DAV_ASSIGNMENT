@@ -22,7 +22,12 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-pulseroute.db
+pulseroute.db*
+*.db
+*.db-shm
+*.db-wal
+backend/*.db*
+backend/data/*.db
 
 # Node
 node_modules/
