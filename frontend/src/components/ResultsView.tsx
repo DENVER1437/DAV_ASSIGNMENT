@@ -36,6 +36,7 @@ interface ResultsViewProps {
   isDatabaseReady?: boolean;
   onLoadDemoDataset?: () => Promise<void>;
   onGoToDatabase?: () => void;
+  forceMobileTab?: 'list' | 'map';
 }
 
 export const ResultsView: React.FC<ResultsViewProps> = ({
@@ -55,9 +56,33 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
   isDatabaseReady = true,
   onLoadDemoDataset,
   onGoToDatabase,
+  forceMobileTab,
 }) => {
   const [mobileTab, setMobileTab] = useState<'list' | 'map'>('list');
   const [hoveredHospitalId, setHoveredHospitalId] = useState<string | null>(null);
+
+  // Sync forced mobile tab if requested (e.g. from drawer Show on Map)
+  useEffect(() => {
+    if (forceMobileTab) {
+      setMobileTab(forceMobileTab);
+      if (forceMobileTab === 'map') {
+        setTimeout(() => {
+          const el = document.getElementById('results-map-container');
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+      }
+    }
+  }, [forceMobileTab]);
+
+  const handleSwitchMobileTab = (tab: 'list' | 'map') => {
+    setMobileTab(tab);
+    if (tab === 'map') {
+      setTimeout(() => {
+        const el = document.getElementById('results-map-container');
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }
+  };
 
   // Quick filter states
   const [sortBy, setSortBy] = useState<'suitability' | 'distance' | 'wait_time' | 'available_beds'>('suitability');
@@ -254,15 +279,15 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
           </div>
 
           {/* Action Controls & Mobile Switcher */}
-          <div className="flex items-center space-x-2 shrink-0">
+          <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 shrink-0 w-full sm:w-auto">
             {/* Mobile Tab Switcher */}
             <div className="flex lg:hidden p-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg">
               <button
                 type="button"
-                onClick={() => setMobileTab('list')}
-                className={`flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-semibold ${
+                onClick={() => handleSwitchMobileTab('list')}
+                className={`flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-semibold cursor-pointer ${
                   mobileTab === 'list'
-                    ? 'bg-white dark:bg-slate-700 text-teal-700 dark:text-teal-300 shadow-2xs'
+                    ? 'bg-white dark:bg-slate-700 text-teal-700 dark:text-teal-300 shadow-2xs font-bold'
                     : 'text-slate-600 dark:text-slate-400'
                 }`}
               >
@@ -271,10 +296,10 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => setMobileTab('map')}
-                className={`flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-semibold ${
+                onClick={() => handleSwitchMobileTab('map')}
+                className={`flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-semibold cursor-pointer ${
                   mobileTab === 'map'
-                    ? 'bg-white dark:bg-slate-700 text-teal-700 dark:text-teal-300 shadow-2xs'
+                    ? 'bg-white dark:bg-slate-700 text-teal-700 dark:text-teal-300 shadow-2xs font-bold'
                     : 'text-slate-600 dark:text-slate-400'
                 }`}
               >
@@ -553,7 +578,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
                       onSelectAndDispatch={(h) => onSelectAndDispatch && onSelectAndDispatch(h)}
                       onShowOnMap={(h) => {
                         onSelectHospital(h);
-                        setMobileTab('map');
+                        handleSwitchMobileTab('map');
                       }}
                       onToggleCompare={onToggleCompare}
                       onHover={(id) => setHoveredHospitalId(id)}
@@ -566,7 +591,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
         </div>
 
         {/* RIGHT PANE: Pinned Interactive Leaflet Map */}
-        <div className={`lg:col-span-5 xl:col-span-4 ${mobileTab === 'list' ? 'hidden lg:block' : 'block'}`}>
+        <div id="results-map-container" className={`lg:col-span-5 xl:col-span-4 ${mobileTab === 'list' ? 'hidden lg:block' : 'block'}`}>
           <div className="sticky top-18 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xs">
             <HospitalMap
               userLocation={userLoc}
@@ -578,7 +603,8 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
               ambulancePosition={ambulancePosition}
               dispatchPhase={dispatchPhase}
               onSelectHospital={onSelectHospital}
-              heightClass="h-[500px] lg:h-[calc(100vh-210px)]"
+              heightClass="h-[calc(100vh-230px)] min-h-[460px] lg:h-[calc(100vh-210px)]"
+              isVisible={mobileTab === 'map'}
             />
           </div>
         </div>
@@ -600,6 +626,31 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
           </button>
         </div>
       )}
+
+      {/* Floating Mobile Map/List View Switcher */}
+      <div
+        className={`fixed ${
+          comparedHospitalIds.length > 0 ? 'bottom-18' : 'bottom-5'
+        } left-1/2 -translate-x-1/2 z-40 lg:hidden`}
+      >
+        <button
+          type="button"
+          onClick={() => handleSwitchMobileTab(mobileTab === 'list' ? 'map' : 'list')}
+          className="flex items-center space-x-2 px-4 py-2.5 rounded-full bg-slate-900/95 text-white dark:bg-teal-600 dark:text-white font-bold text-xs shadow-2xl border border-slate-700/80 active:scale-95 transition-all cursor-pointer backdrop-blur-md"
+        >
+          {mobileTab === 'list' ? (
+            <>
+              <Map className="w-3.5 h-3.5 text-teal-400 dark:text-white" />
+              <span>Interactive Map ({hospitals.length})</span>
+            </>
+          ) : (
+            <>
+              <List className="w-3.5 h-3.5 text-teal-400 dark:text-white" />
+              <span>Hospital List ({hospitals.length})</span>
+            </>
+          )}
+        </button>
+      </div>
 
     </div>
   );

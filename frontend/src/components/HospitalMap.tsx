@@ -14,6 +14,7 @@ interface HospitalMapProps {
   roadRoute?: [number, number][];
   ambulancePosition?: [number, number] | null;
   dispatchPhase?: DispatchPhase;
+  isVisible?: boolean;
 }
 
 export const HospitalMap: React.FC<HospitalMapProps> = ({
@@ -23,10 +24,11 @@ export const HospitalMap: React.FC<HospitalMapProps> = ({
   dispatchedHospital,
   hoveredHospitalId,
   onSelectHospital,
-  heightClass = 'h-[520px] lg:h-[calc(100vh-160px)]',
+  heightClass = 'h-[500px] lg:h-[calc(100vh-160px)]',
   roadRoute,
   ambulancePosition,
   dispatchPhase = 'en_route_patient',
+  isVisible = true,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -60,11 +62,73 @@ export const HospitalMap: React.FC<HospitalMapProps> = ({
     L.control.zoom({ position: 'bottomright' }).addTo(map);
     mapInstanceRef.current = map;
 
+    // Trigger staggered invalidation to guarantee full tiles render as layout settles
+    const t1 = setTimeout(() => map.invalidateSize(), 60);
+    const t2 = setTimeout(() => map.invalidateSize(), 250);
+    const t3 = setTimeout(() => map.invalidateSize(), 600);
+
     return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
       map.remove();
       mapInstanceRef.current = null;
     };
   }, []);
+
+  // Responsive ResizeObserver: guarantees map sizes correctly when mobile tabs switch or orientation changes
+  useEffect(() => {
+    const container = mapContainerRef.current;
+    if (!container) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.width > 0 && entry.contentRect.height > 0) {
+          if (mapInstanceRef.current) {
+            mapInstanceRef.current.invalidateSize();
+          }
+        }
+      }
+    });
+
+    observer.observe(container);
+
+    const handleWindowResize = () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize();
+      }
+    };
+
+    window.addEventListener('resize', handleWindowResize);
+    window.addEventListener('orientationchange', handleWindowResize);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', handleWindowResize);
+      window.removeEventListener('orientationchange', handleWindowResize);
+    };
+  }, []);
+
+  // When isVisible toggles (e.g. mobile tab switches from list to map), invalidate Leaflet dimensions immediately
+  useEffect(() => {
+    if (isVisible && mapInstanceRef.current) {
+      const t1 = setTimeout(() => {
+        mapInstanceRef.current?.invalidateSize();
+      }, 50);
+      const t2 = setTimeout(() => {
+        mapInstanceRef.current?.invalidateSize();
+      }, 200);
+      const t3 = setTimeout(() => {
+        mapInstanceRef.current?.invalidateSize();
+      }, 500);
+
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+      };
+    }
+  }, [isVisible]);
 
   // Invalidate map size on full screen toggle
   useEffect(() => {
@@ -411,13 +475,13 @@ export const HospitalMap: React.FC<HospitalMapProps> = ({
       <div ref={mapContainerRef} className="w-full h-full" />
 
       {/* Floating Map Controls */}
-      <div className="absolute top-3 right-3 z-[1000] flex flex-col space-y-2">
+      <div className="absolute top-3 right-3 z-[1000] flex flex-col space-y-1.5">
         {/* Recenter Pin */}
         <button
           type="button"
           onClick={recenterUser}
           title="Re-center on Your Location"
-          className="p-2.5 rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+          className="p-2 sm:p-2.5 rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
         >
           <Crosshair className="w-4 h-4 text-teal-600 dark:text-teal-400" />
         </button>
@@ -427,7 +491,7 @@ export const HospitalMap: React.FC<HospitalMapProps> = ({
           type="button"
           onClick={fitBoundsAll}
           title="Fit All Hospitals on Map"
-          className="p-2.5 rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+          className="p-2 sm:p-2.5 rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
         >
           <Compass className="w-4 h-4 text-teal-600 dark:text-teal-400" />
         </button>
@@ -437,7 +501,7 @@ export const HospitalMap: React.FC<HospitalMapProps> = ({
           type="button"
           onClick={toggleFullScreen}
           title={isFullScreen ? 'Exit Full Screen (Esc)' : 'Open Map in Full Screen'}
-          className={`p-2.5 rounded-xl shadow-md border transition ${
+          className={`p-2 sm:p-2.5 rounded-xl shadow-md border transition ${
             isFullScreen
               ? 'bg-teal-600 text-white border-teal-600 hover:bg-teal-700'
               : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
@@ -453,17 +517,17 @@ export const HospitalMap: React.FC<HospitalMapProps> = ({
 
       {/* Full-Screen Top Header Bar */}
       {isFullScreen && (
-        <div className="absolute top-3 left-3 z-[1000] flex items-center space-x-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-4 py-2 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700">
-          <span className="text-xs font-bold text-slate-900 dark:text-white">
-            📍 Emergency Map Explorer ({hospitals.length} Hospitals)
+        <div className="absolute top-3 left-3 z-[1000] flex items-center space-x-2 sm:space-x-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 max-w-[calc(100%-80px)]">
+          <span className="text-[11px] sm:text-xs font-bold text-slate-900 dark:text-white truncate">
+            📍 Emergency Map ({hospitals.length} Hospitals)
           </span>
           <button
             type="button"
             onClick={() => setIsFullScreen(false)}
-            className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition"
+            className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition shrink-0"
           >
             <X className="w-3.5 h-3.5" />
-            <span>Close Full Screen</span>
+            <span className="hidden sm:inline">Close</span>
           </button>
         </div>
       )}
@@ -473,35 +537,35 @@ export const HospitalMap: React.FC<HospitalMapProps> = ({
         <div
           className={`absolute ${
             isFullScreen ? 'top-14 left-3' : 'top-3 left-3'
-          } z-[1000] flex items-center space-x-2 bg-slate-900/95 text-white backdrop-blur-md px-3.5 py-1.5 rounded-xl shadow-xl border border-emerald-500/50 text-xs animate-in fade-in duration-200`}
+          } z-[1000] flex items-center space-x-1.5 sm:space-x-2 bg-slate-900/95 text-white backdrop-blur-md px-2.5 sm:px-3.5 py-1.5 rounded-xl shadow-xl border border-emerald-500/50 text-xs animate-in fade-in duration-200 max-w-[calc(100%-65px)] sm:max-w-xs`}
         >
-          <div className="flex items-center space-x-1.5">
-            <span className="text-base animate-pulse">🚑</span>
-            <span className="font-extrabold text-emerald-400">Unit #PR-408</span>
+          <div className="flex items-center space-x-1 shrink-0">
+            <span className="text-sm sm:text-base animate-pulse">🚑</span>
+            <span className="font-extrabold text-emerald-400 text-[11px] sm:text-xs">#PR-408</span>
           </div>
-          <span className="text-slate-500">•</span>
-          <span className="text-[11px] text-slate-200 font-medium truncate max-w-[180px] sm:max-w-xs">
+          <span className="text-slate-500 hidden sm:inline">•</span>
+          <span className="text-[10px] sm:text-[11px] text-slate-200 font-medium truncate">
             {dispatchPhase === 'en_route_patient' && 'En Route to Patient'}
             {dispatchPhase === 'arrived_patient' && 'On-Scene Stabilization'}
             {dispatchPhase === 'transit_hospital' && `ER Transit → ${dispatchedHospital.Hospital_Name}`}
-            {dispatchPhase === 'admitted_complete' && 'Emergency Intake Complete'}
+            {dispatchPhase === 'admitted_complete' && 'Intake Complete'}
           </span>
         </div>
       )}
 
-      {/* Map Legend Strip */}
-      <div className="absolute bottom-3 left-3 z-[1000] px-3 py-1.5 rounded-xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md shadow-md border border-slate-200 dark:border-slate-700 text-[11px] flex items-center space-x-3 text-slate-600 dark:text-slate-300">
-        <div className="flex items-center space-x-1">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-          <span>High Match (85+)</span>
+      {/* Map Legend Strip (Compact and positioned to never block Leaflet zoom controls) */}
+      <div className="absolute bottom-3 left-3 z-[1000] px-2.5 py-1 sm:py-1.5 rounded-xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md shadow-md border border-slate-200 dark:border-slate-700 text-[10px] sm:text-[11px] flex items-center space-x-2 sm:space-x-3 text-slate-600 dark:text-slate-300 max-w-[calc(100%-85px)]">
+        <div className="flex items-center space-x-1 shrink-0">
+          <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-emerald-500 shrink-0" />
+          <span className="whitespace-nowrap font-medium">85+</span>
         </div>
-        <div className="flex items-center space-x-1">
-          <span className="w-2.5 h-2.5 rounded-full bg-teal-600" />
-          <span>Good Match (60-84)</span>
+        <div className="flex items-center space-x-1 shrink-0">
+          <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-teal-600 shrink-0" />
+          <span className="whitespace-nowrap font-medium">60-84</span>
         </div>
-        <div className="flex items-center space-x-1">
-          <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-          <span>Lower Match (&lt;60)</span>
+        <div className="flex items-center space-x-1 shrink-0">
+          <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-rose-500 shrink-0" />
+          <span className="whitespace-nowrap font-medium">&lt;60</span>
         </div>
       </div>
     </div>

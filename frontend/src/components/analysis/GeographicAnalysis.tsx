@@ -242,7 +242,7 @@ export const GeographicAnalysis: React.FC<GeographicAnalysisProps> = ({ analysis
       {/* Map / Cluster View + State Table Split View */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1">
         {/* Left: Map or Cluster Density (7 cols) */}
-        <div className="lg:col-span-7 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 relative bg-slate-100 dark:bg-slate-800/60 min-h-[380px] flex flex-col">
+        <div className="lg:col-span-7 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 relative bg-slate-100 dark:bg-slate-800/60 min-h-[380px] h-[380px] sm:h-[450px] flex flex-col">
           {/* Map Container: always kept mounted in DOM to prevent Leaflet detachment */}
           <div className={`relative w-full h-full min-h-[380px] flex-1 ${viewMode === 'map' ? 'block' : 'hidden'}`}>
             <div ref={mapContainerRef} className="absolute inset-0 w-full h-full z-0 rounded-xl" />

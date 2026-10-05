@@ -41,8 +41,8 @@ export const HospitalCompareModal: React.FC<HospitalCompareModalProps> = ({
         </div>
 
         {/* Comparison Table Grid */}
-        <div className="flex-1 overflow-x-auto p-5 sm:p-6">
-          <table className="w-full border-collapse text-left text-xs sm:text-sm">
+        <div className="flex-1 overflow-x-auto p-4 sm:p-6">
+          <table className="w-full min-w-[500px] border-collapse text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-800">
                 <th className="p-3 font-semibold text-slate-400 w-1/4">Metric</th>

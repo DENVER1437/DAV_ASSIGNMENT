@@ -99,11 +99,11 @@ export const DispatchModal: React.FC<DispatchModalProps> = ({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 10 }}
         transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-        className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden"
+        className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden max-h-[92vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="bg-slate-900 dark:bg-slate-800 text-white p-4 sm:p-5 flex items-center justify-between border-b border-slate-800">
+        <div className="bg-slate-900 dark:bg-slate-800 text-white p-4 sm:p-5 flex items-center justify-between border-b border-slate-800 shrink-0">
           <div className="flex items-center space-x-2.5">
             <div className="p-2 rounded-lg bg-teal-500/20 text-teal-400 border border-teal-500/30">
               <Ambulance className="w-5 h-5" />
@@ -129,7 +129,7 @@ export const DispatchModal: React.FC<DispatchModalProps> = ({
         </div>
 
         {/* Selected Hospital Destination Card */}
-        <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+        <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs shrink-0">
           <div>
             <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
               Confirm Destination
@@ -154,7 +154,7 @@ export const DispatchModal: React.FC<DispatchModalProps> = ({
         </div>
 
         {/* Dispatch Form */}
-        <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-3.5 text-xs">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-3.5 text-xs overflow-y-auto flex-1">
           
           {/* Patient / Caller Name */}
           <div className="space-y-1">

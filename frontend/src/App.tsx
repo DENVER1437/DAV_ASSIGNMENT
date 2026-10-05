@@ -52,6 +52,7 @@ export default function App() {
   // Compared hospitals (up to 3)
   const [comparedHospitals, setComparedHospitals] = useState<Hospital[]>([]);
   const [isCompareOpen, setIsCompareOpen] = useState(false);
+  const [resultsForceMobileTab, setResultsForceMobileTab] = useState<'list' | 'map' | undefined>(undefined);
 
   // Sync dark mode class and color-scheme
   useEffect(() => {
@@ -349,6 +350,7 @@ export default function App() {
                 isDatabaseReady={isDatabaseReady}
                 onLoadDemoDataset={handleLoadDemoDataset}
                 onGoToDatabase={() => setCurrentTab('database')}
+                forceMobileTab={resultsForceMobileTab}
               />
             </div>
           </div>
@@ -386,11 +388,15 @@ export default function App() {
       <HospitalDrawer
         hospital={selectedHospital}
         onClose={() => setSelectedHospital(null)}
-        onShowOnMap={() => {
-          setSelectedHospital(null);
+        onShowOnMap={(h) => {
+          setSelectedHospital(h);
           setCurrentTab('results');
-          const el = document.getElementById('results-section');
-          if (el) el.scrollIntoView({ behavior: 'smooth' });
+          setResultsForceMobileTab('map');
+          setTimeout(() => setResultsForceMobileTab(undefined), 350);
+          setTimeout(() => {
+            const el = document.getElementById('results-map-container') || document.getElementById('results-section');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+          }, 80);
         }}
         onSelectAndDispatch={handleSelectAndDispatch}
         isSelected={dispatchedHospital?.Hospital_ID === selectedHospital?.Hospital_ID}
