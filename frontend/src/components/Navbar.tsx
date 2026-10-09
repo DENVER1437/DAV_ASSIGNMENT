@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { MapPin, Moon, Sun, Database, Search, Building2, BarChart3, Activity } from 'lucide-react';
+import { MapPin, Moon, Sun, Database, Search, Building2, BarChart3, Activity, LayoutDashboard, Workflow } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface NavbarProps {
-  currentTab: 'finder' | 'results' | 'database' | 'analysis';
-  setCurrentTab: (tab: 'finder' | 'results' | 'database' | 'analysis') => void;
+  currentTab: 'finder' | 'results' | 'database' | 'analysis' | 'tableau' | 'knime';
+  setCurrentTab: (tab: 'finder' | 'results' | 'database' | 'analysis' | 'tableau' | 'knime') => void;
   detectedLocality?: string | null;
   onDetectLocation?: () => void;
   isDatabaseReady: boolean;
@@ -82,7 +82,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               className={`relative flex items-center space-x-1 sm:space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer shrink-0 ${
                 currentTab === 'results'
                   ? 'text-teal-700 dark:text-teal-300 bg-teal-50/80 dark:bg-teal-950/40 border border-teal-200/80 dark:border-teal-800/60 shadow-2xs font-bold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/60'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/60'
               }`}
             >
               <Building2 className="w-3.5 h-3.5 shrink-0" />
@@ -126,6 +126,34 @@ export const Navbar: React.FC<NavbarProps> = ({
             <BarChart3 className="w-3.5 h-3.5 shrink-0" />
             <span className="hidden sm:inline">Data Analysis</span>
             <span className="sm:hidden">Analysis</span>
+          </button>
+
+          {/* Tableau Tab */}
+          <button
+            type="button"
+            onClick={() => setCurrentTab('tableau')}
+            className={`relative flex items-center space-x-1 sm:space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer shrink-0 ${
+              currentTab === 'tableau'
+                ? 'text-teal-700 dark:text-teal-300 bg-teal-50/80 dark:bg-teal-950/40 border border-teal-200/80 dark:border-teal-800/60 shadow-2xs font-bold'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/60'
+            }`}
+          >
+            <LayoutDashboard className="w-3.5 h-3.5 shrink-0 text-indigo-500 dark:text-indigo-400" />
+            <span>Tableau</span>
+          </button>
+
+          {/* KNIME Tab */}
+          <button
+            type="button"
+            onClick={() => setCurrentTab('knime')}
+            className={`relative flex items-center space-x-1 sm:space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer shrink-0 ${
+              currentTab === 'knime'
+                ? 'text-teal-700 dark:text-teal-300 bg-teal-50/80 dark:bg-teal-950/40 border border-teal-200/80 dark:border-teal-800/60 shadow-2xs font-bold'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/70 dark:hover:bg-slate-800/60'
+            }`}
+          >
+            <Workflow className="w-3.5 h-3.5 shrink-0 text-amber-500 dark:text-amber-400" />
+            <span>KNIME</span>
           </button>
         </nav>
 

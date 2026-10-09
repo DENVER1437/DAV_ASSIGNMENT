@@ -8,12 +8,25 @@ import { HospitalCompareModal } from './components/HospitalCompareModal';
 import { DispatchModal, PatientDispatchInfo } from './components/DispatchModal';
 import { DataManagementView } from './components/DataManagementView';
 import { DataAnalysisView } from './components/analysis/DataAnalysisView';
+import { TableauView } from './components/tableau/TableauView';
+import { KnimeView } from './components/knime/KnimeView';
 import { searchHospitals, getDatasetStatus, loadDemoDataset } from './services/api';
 import { Hospital, HospitalSearchRequest, HospitalSearchResponse, DatasetStatus } from './types';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
 
-const getInitialTab = (): 'finder' | 'results' | 'database' | 'analysis' => {
+const getInitialTab = (): 'finder' | 'results' | 'database' | 'analysis' | 'tableau' | 'knime' => {
+  // First check window.location.pathname (e.g., /tableau, /knime, /analysis, /database)
+  const path = window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase();
+  if (path === 'tableau') return 'tableau';
+  if (path === 'knime') return 'knime';
+  if (path === 'analysis') return 'analysis';
+  if (path === 'database') return 'database';
+  if (path === 'results') return 'results';
+
+  // Next check window.location.hash (e.g., #/tableau, #/knime)
   const hash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
+  if (hash === 'tableau') return 'tableau';
+  if (hash === 'knime') return 'knime';
   if (hash === 'analysis') return 'analysis';
   if (hash === 'database') return 'database';
   if (hash === 'results') return 'results';
@@ -21,7 +34,7 @@ const getInitialTab = (): 'finder' | 'results' | 'database' | 'analysis' => {
 };
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<'finder' | 'results' | 'database' | 'analysis'>(getInitialTab);
+  const [currentTab, setCurrentTab] = useState<'finder' | 'results' | 'database' | 'analysis' | 'tableau' | 'knime'>(getInitialTab);
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     return localStorage.getItem('careroute_theme') === 'dark' || localStorage.getItem('pulseroute_theme') === 'dark';
   });
@@ -65,18 +78,26 @@ export default function App() {
     }
   }, [darkMode]);
 
-  // Sync active tab with URL hash for direct links and persistent refresh
+  // Sync active tab with URL pathname & hash for direct links, bookmarking, and persistent refresh
   useEffect(() => {
+    const targetPath = currentTab === 'finder' ? '/' : `/${currentTab}`;
+    if (window.location.pathname !== targetPath) {
+      window.history.pushState(null, '', targetPath);
+    }
     window.location.hash = `#/${currentTab}`;
   }, [currentTab]);
 
   useEffect(() => {
-    const handleHashChange = () => {
+    const handleUrlChange = () => {
       const tab = getInitialTab();
       setCurrentTab(tab);
     };
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    window.addEventListener('hashchange', handleUrlChange);
+    window.addEventListener('popstate', handleUrlChange);
+    return () => {
+      window.removeEventListener('hashchange', handleUrlChange);
+      window.removeEventListener('popstate', handleUrlChange);
+    };
   }, []);
 
   // Check database status on mount
@@ -381,6 +402,26 @@ export default function App() {
         {/* ================= TAB 4: DATA ANALYSIS ================= */}
         {currentTab === 'analysis' && (
           <DataAnalysisView onGoToDatabase={() => setCurrentTab('database')} />
+        )}
+
+        {/* ================= TAB 5: TABLEAU ANALYTICS ================= */}
+        {currentTab === 'tableau' && (
+          <TableauView
+            onNavigateTab={(tab) => {
+              setCurrentTab(tab);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+          />
+        )}
+
+        {/* ================= TAB 6: KNIME ANALYTICS ================= */}
+        {currentTab === 'knime' && (
+          <KnimeView
+            onNavigateTab={(tab) => {
+              setCurrentTab(tab);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+          />
         )}
       </main>
 
